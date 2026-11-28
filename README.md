@@ -1,229 +1,400 @@
-# DevOps-AppGestionDesProjets
+# DevOps – Application Gestion des Projets
 
-Ce dépôt contient un projet **Spring Boot** (backend) et **Angular** (frontend) utilisé dans le cadre du module **DevOps**.  
-Il sert de support pratique pour mettre en œuvre un pipeline Jenkins basé sur l'intégration continue (CI) et la livraison continue (CD).
+## 1. Project Overview
 
-L'objectif principal est de permettre aux étudiants de :
-- Configurer un pipeline **SCM** (Source Code Management) avec Jenkins
-- Automatiser le **build** du projet (Maven + npm)
-- Exécuter des **tests unitaires** (si disponibles)
-- Générer un **livrable** déployable
+This project implements a Continuous Delivery (CD) pipeline for a Spring Boot application using Jenkins, Maven, Docker, Docker Hub, and MySQL.
 
----
+The objective is to automate the application lifecycle, from retrieving the source code from GitHub to building the application, creating a Docker image, publishing it to Docker Hub, and deploying it into Docker containers.
 
-## 📁 Structure du projet
-
-```
-DevOps-AppGestionDesProjets/
-├── backend/          # API REST Spring Boot (Java 17, Maven)
-│   ├── src/
-│   │   └── main/java/tn/esprit/backend/
-│   │       ├── entity/
-│   │       ��── repository/
-│   │       ├── service/
-│   │       └── controller/
-│   └── pom.xml
-├── frontend/         # Application Angular 22 (Node.js, npm)
-│   ├── src/
-│   │   └── app/
-│   │       ��── models/
-│   │       ├── services/
-│   │       ├── components/
-│   │       └── pages/
-│   └── package.json
-└── README.md
-```
+The pipeline reduces manual deployment operations and ensures that the application can be built and deployed through a repeatable process.
 
 ---
 
-## 🧩 Modèle de données
+## 2. Technologies Used
 
-Le projet simule une application de gestion de projets pour une organisation composée d'entreprises, d'équipes et de projets.
-
-| Entité | Description |
+| Technology | Role |
 |---|---|
-| `Entreprise` | Possède un nom et une adresse, regroupe plusieurs équipes |
-| `Equipe` | Appartient à une entreprise, a un nom et une spécialité, travaille sur plusieurs projets |
-| `Projet` | Sujet de travail partagé entre plusieurs équipes |
-| `ProjetDetaille` | Détails techniques d'un projet : technologie, coût provisoire, date de début |
+| Java 21 | Development environment |
+| Spring Boot | Backend application framework |
+| Maven | Build and dependency management |
+| Jenkins | CI/CD pipeline automation |
+| Docker | Containerization |
+| Docker Hub | Docker image registry |
+| MySQL 8.0 | Relational database |
+| Git & GitHub | Source code management |
 
 ---
 
-## ⚙️ Prérequis
+## 3. Project Architecture
 
-Avant de lancer le projet, vérifier que les outils suivants sont installés :
+The application uses a containerized architecture composed of a Spring Boot backend and a MySQL database.
 
-| Outil | Version minimale | Vérification |
-|---|---|---|
-| Java JDK | 17 | `java -version` |
-| Maven | 3.8+ | `mvn -version` |
-| Node.js | 18+ | `node -v` |
-| npm | 9+ | `npm -v` |
-| Angular CLI | 22+ | `ng version` |
-| MySQL | 8.0+ | `mysql --version` |
+The backend container communicates with the MySQL container through a dedicated Docker network.
 
----
-
-## 🗄️ Configuration de la base de données
-
-Le backend se connecte à une base de données **MySQL**.  
-Les paramètres de connexion se trouvent dans `backend/src/main/resources/application.properties` :
-
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/test_db?createDatabaseIfNotExist=true
-spring.datasource.username=root
-spring.datasource.password=root
-spring.jpa.hibernate.ddl-auto=update
+```text
+                 Developer
+                     |
+                     v
+                  GitHub
+                     |
+                     v
+                  Jenkins
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+     Maven Build           Docker Build
+          |                     |
+          +----------+----------+
+                     |
+                     v
+              Docker Image
+                     |
+                     v
+                 Docker Hub
+                     |
+                     v
+               Deployment
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+     Backend App             MySQL 8.0
+     Port 8080               Port 3306
+          |
+          v
+    REST API Endpoints
 ```
 
-> La base de données `test_db` est créée automatiquement au premier démarrage.  
-> Modifier `username` et `password` selon votre configuration MySQL locale.
+### Docker containers
+
+| Container | Image | Purpose | Port |
+|---|---|---|---|
+| `backend-app` | `meriem0014/backend-app:latest` | Spring Boot REST API | 8080 |
+| `mysql` | `mysql:8.0` | Database management | 3306 |
+
+Both containers are connected to the `backend-network` Docker network.
 
 ---
 
-## 🚀 Lancer le projet
+## 4. Repository Structure
 
-### 1. Backend — Spring Boot
+```text
+DevOps-AppGestionDesProjets/
+│
+├── Jenkinsfile
+│
+└── backend/
+    ├── Dockerfile
+    ├── pom.xml
+    ├── mvnw
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/
+    │   │   └── resources/
+    │   ││       └── application.properties
+    │   │
+    │   └── test/
+    │
+    └── target/
+```
+
+---
+
+## 5. Continuous Delivery Pipeline
+
+The Jenkins pipeline is defined in the `Jenkinsfile` at the root of the repository.
+
+It automates the following stages:
+
+### Stage 1 – Checkout
+
+Jenkins retrieves the source code from the GitHub repository using the configured branch.
+
+### Stage 2 – Build Maven
+
+Maven compiles the Spring Boot application and packages it into a JAR file.
+
+```bash
+mvn clean package -DskipTests
+```
+
+The `-DskipTests` option skips the execution of tests during this pipeline build.
+
+### Stage 3 – Docker Build
+
+Docker builds an image containing the backend application using the Dockerfile.
+
+The image is tagged locally as:
+
+```text
+backend-app:latest
+meriem0014/backend-app:latest
+```
+
+### Stage 4 – Docker Push
+
+Jenkins authenticates with Docker Hub using stored credentials and publishes the image to the Docker Hub repository.
+
+```text
+meriem0014/backend-app:latest
+```
+
+The credentials are managed through Jenkins Credentials and are not hardcoded into the pipeline.
+
+### Stage 5 – Deploy MySQL
+
+Jenkins ensures that the MySQL container is running.
+
+The deployment uses:
+
+- MySQL 8.0
+- Database: `test_db`
+- Docker network: `backend-network`
+- Persistent volume: `mysql_data`
+- Health check to verify database readiness
+
+### Stage 6 – Deploy Backend
+
+Jenkins deploys the backend application by pulling the Docker image from Docker Hub and launching the container.
+
+The backend container:
+
+- Uses the Docker network `backend-network`.
+- Exposes port `8080`.
+- Connects to MySQL using the hostname `mysql`.
+- Uses environment variables for its database configuration.
+
+### Stage 7 – Verify Deployment
+
+Jenkins checks the deployed containers and displays the backend logs to verify that the application has started.
+
+The pipeline reports its final execution status as successful or failed.
+
+---
+
+## 6. Docker Configuration
+
+### Backend Dockerfile
+
+The Dockerfile is located in the `backend/` directory.
+
+It is responsible for creating the backend image, containing the Java runtime and the packaged Spring Boot application.
+
+The resulting image is used by Jenkins for deployment.
+
+### Docker Network
+
+A dedicated Docker network is created:
+
+```bash
+docker network create backend-network
+```
+
+The backend connects to MySQL using the container name:
+
+```text
+mysql
+```
+
+This allows the application to reach the database internally without relying on `localhost`.
+
+### Persistent Database Storage
+
+A Docker volume is used to preserve MySQL data:
+
+```text
+mysql_data
+```
+
+This allows database data to persist beyond the lifecycle of the MySQL container.
+
+---
+
+## 7. Configuration
+
+The application uses environment variables during deployment to configure the database connection.
+
+| Variable | Description |
+|---|---|
+| `SPRING_DATASOURCE_URL` | MySQL connection URL |
+| `SPRING_DATASOURCE_USERNAME` | Database username |
+| `SPRING_DATASOURCE_PASSWORD` | Database password |
+
+The deployed backend connects to MySQL using:
+
+```text
+jdbc:mysql://mysql:3306/test_db?createDatabaseIfNotExist=true
+```
+
+The database hostname `mysql` corresponds to the MySQL container name within the Docker network.
+
+Sensitive credentials should be stored securely and never committed to GitHub.
+
+---
+
+## 8. Running the Application
+
+### Prerequisites
+
+- Java
+- Maven
+- Docker Engine
+- Git
+
+### Build the backend manually
 
 ```bash
 cd backend
-
-# Compiler et lancer
-mvn spring-boot:run
+mvn clean package -DskipTests
 ```
 
-Le backend démarre sur **http://localhost:8080**
+### Build the Docker image
 
-Pour vérifier : ouvrir `http://localhost:8080/entreprise/all` → doit retourner `[]`
-
-### 2. Frontend — Angular
-
-> Ouvrir un **second terminal** sans fermer celui du backend.
+From the repository root:
 
 ```bash
-cd frontend
-
-# Installer les dépendances (première fois uniquement)
-npm install
-
-# Lancer le serveur de développement
-ng serve -o
+docker build -t backend-app:latest ./backend
 ```
 
-L'application s'ouvre automatiquement sur **http://localhost:4200**
+### Start MySQL
 
----
-
-## 🔌 Endpoints REST disponibles
-
-### Entreprise — `/entreprise`
-| Méthode | URL | Description |
-|---|---|---|
-| GET | `/entreprise/all` | Lister toutes les entreprises |
-| GET | `/entreprise/get/{id}` | Obtenir une entreprise par ID |
-| POST | `/entreprise/add` | Ajouter une entreprise |
-| PUT | `/entreprise/update` | Modifier une entreprise |
-| DELETE | `/entreprise/delete/{id}` | Supprimer une entreprise |
-
-### Equipe — `/equipe`
-| Méthode | URL | Description |
-|---|---|---|
-| GET | `/equipe/all` | Lister toutes les équipes |
-| GET | `/equipe/get/{id}` | Obtenir une équipe par ID |
-| POST | `/equipe/add` | Ajouter une équipe |
-| PUT | `/equipe/update` | Modifier une équipe |
-| DELETE | `/equipe/delete/{id}` | Supprimer une équipe |
-| PUT | `/equipe/assign-entreprise/{equipeId}/{entrepriseId}` | Affecter une équipe à une entreprise |
-| PUT | `/equipe/assign-projet/{equipeId}/{projetId}` | Affecter une équipe à un projet |
-
-### Projet — `/projet`
-| Méthode | URL | Description |
-|---|---|---|
-| GET | `/projet/all` | Lister tous les projets |
-| GET | `/projet/get/{id}` | Obtenir un projet par ID |
-| POST | `/projet/add` | Ajouter un projet |
-| PUT | `/projet/update` | Modifier un projet |
-| DELETE | `/projet/delete/{id}` | Supprimer un projet |
-
-### Projet Détaillé — `/projet-detaille`
-| Méthode | URL | Description |
-|---|---|---|
-| GET | `/projet-detaille/all` | Lister tous les projets détaillés |
-| GET | `/projet-detaille/get/{id}` | Obtenir un projet d��taillé par ID |
-| POST | `/projet-detaille/add` | Ajouter un projet détaillé |
-| PUT | `/projet-detaille/update` | Modifier un projet détaillé |
-| DELETE | `/projet-detaille/delete/{id}` | Supprimer un projet détaillé |
-| PUT | `/projet-detaille/assign-projet/{pdId}/{projetId}` | Affecter à un projet |
-
----
-
-## 🔧 Intégration Jenkins (CI/CD)
-
-Ce projet est conçu pour être intégré dans un pipeline Jenkins. Un `Jenkinsfile` peut être ajouté à la racine du dépôt pour automatiser les étapes suivantes :
-
-```
-Checkout SCM → Build Backend (mvn) → Tests → Build Frontend (npm) → Archive Artifacts
+```bash
+docker network create backend-network
 ```
 
-Exemple de pipeline :
+```bash
+docker volume create mysql_data
+```
 
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Checkout') {
-            steps { checkout scm }
-        }
-        stage('Build Backend') {
-            steps {
-                dir('backend') {
-                    sh 'mvn clean package -DskipTests'
-                }
-            }
-        }
-        stage('Test Backend') {
-            steps {
-                dir('backend') {
-                    sh 'mvn test'
-                }
-            }
-        }
-        stage('Build Frontend') {
-            steps {
-                dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build'
-                }
-            }
-        }
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
-            }
-        }
-    }
-}
+```bash
+docker run -d \
+  --name mysql \
+  --network backend-network \
+  -e MYSQL_ROOT_PASSWORD=root \
+  -e MYSQL_DATABASE=test_db \
+  -v mysql_data:/var/lib/mysql \
+  -p 3306:3306 \
+  mysql:8.0
+```
+
+### Start the backend
+
+```bash
+docker run -d \
+  --name backend-app \
+  --network backend-network \
+  -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL="jdbc:mysql://mysql:3306/test_db?createDatabaseIfNotExist=true" \
+  -e SPRING_DATASOURCE_USERNAME=root \
+  -e SPRING_DATASOURCE_PASSWORD=root \
+  backend-app:latest
 ```
 
 ---
 
-## 🛠️ Stack technique
+## 9. Testing the Deployment
 
-| Couche | Technologie |
+### Verify running containers
+
+```bash
+docker ps
+```
+
+### Verify Docker images
+
+```bash
+docker images
+```
+
+### Check backend logs
+
+```bash
+docker logs --tail 50 backend-app
+```
+
+### Test the REST API
+
+```bash
+curl -i http://localhost:8080/entreprise/all
+```
+
+Expected result:
+
+```http
+HTTP/1.1 200
+Content-Type: application/json
+```
+
+The endpoint returns a JSON response containing the list of enterprises. If the database is empty, the response may be:
+
+```json
+[]
+```
+
+An HTTP 200 response confirms that the request reached the backend successfully and that the endpoint responded correctly.
+
+---
+
+## 10. Jenkins Configuration
+
+The Jenkins pipeline requires Docker Hub credentials to publish the application image.
+
+### Required Jenkins credential
+
+| Field | Value |
 |---|---|
-| Backend | Spring Boot 4.1.0, Spring Data JPA, Spring Web MVC |
-| Base de données | MySQL 8.0 |
-| ORM | Hibernate |
-| Utilitaires | Lombok |
-| Frontend | Angular 22 (Standalone Components) |
-| HTTP Client | Angular HttpClient |
-| Build backend | Apache Maven |
-| Build frontend | npm / Angular CLI |
-| CI/CD | Jenkins |
-| Conteneurisation | Docker *(à venir)* |
+| Credential type | Username with password |
+| Username | Docker Hub username |
+| Password | Docker Hub access token |
+| Credential ID | `dockerhub-credentials` |
+
+The credential ID must match the one referenced in the Jenkinsfile.
+
+### Pipeline execution
+
+The pipeline can be triggered through Jenkins by running the configured pipeline job.
+
+The Jenkins Stage View provides a visual overview of the execution of each stage, while the Console Output provides detailed execution logs.
 
 ---
 
-## 👤 Auteur
+## 11. Results
 
-**ESPRIT — UP ASI**  
+The implemented pipeline automates the following operations:
+
+- Retrieval of the application source code.
+- Maven compilation and packaging.
+- Docker image creation.
+- Publishing the image to Docker Hub.
+- Deployment of the MySQL database container.
+- Deployment of the Spring Boot backend container.
+- Verification of the deployed application.
+
+The deployed backend was verified through Docker container status, application logs, and an HTTP request to the REST API.
+
+---
+
+## 12. Limitations and Future Improvements
+
+Several improvements can be introduced to make the pipeline more robust and closer to production standards:
+
+- Integrate automated unit and integration tests into the pipeline.
+- Use a dedicated non-root MySQL user instead of the root account.
+- Replace `latest` with versioned Docker image tags.
+- Improve health checks for the backend application.
+- Add automated rollback in case of deployment failure.
+- Implement monitoring and alerting.
+- Secure sensitive information using dedicated secrets management.
+- Add SonarQube for static code analysis.
+- Add automated testing before deployment.
+
+---
+
+## 13. Conclusion
+
+This project demonstrates the implementation of a Continuous Delivery workflow using Jenkins, Maven, Docker, Docker Hub, Spring Boot, and MySQL.
+
+The pipeline automates the main deployment steps, from source code retrieval to container deployment, making the application deployment process more reliable, reproducible, and easier to maintain.
+
+It also provides a foundation for future DevOps improvements, including continuous integration, automated testing, security analysis, monitoring, and deployment optimization.
