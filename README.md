@@ -1,400 +1,159 @@
-# DevOps – Application Gestion des Projets
 
-## 1. Project Overview
+DevOps – Automatisation du Continuous Deployment avec Jenkins et Docker
+1. Présentation du projet
 
-This project implements a Continuous Delivery (CD) pipeline for a Spring Boot application using Jenkins, Maven, Docker, Docker Hub, and MySQL.
+Ce projet consiste à automatiser le déploiement d'une application backend Spring Boot à l'aide d'un pipeline Continuous Deployment (CD) orchestré par Jenkins. Le pipeline récupère le code source depuis GitHub, compile et package l'application avec Maven, construit une image Docker, publie cette image sur Docker Hub, puis déploie les conteneurs de l'application et de sa base de données MySQL.
 
-The objective is to automate the application lifecycle, from retrieving the source code from GitHub to building the application, creating a Docker image, publishing it to Docker Hub, and deploying it into Docker containers.
+L'objectif est de rendre le déploiement reproductible et de vérifier automatiquement que les services sont lancés.
+2. Technologies utilisées
 
-The pipeline reduces manual deployment operations and ensures that the application can be built and deployed through a repeatable process.
+    Git / GitHub : versionnement et hébergement du code source.
+    Jenkins : orchestration du pipeline CI/CD.
+    Maven : compilation et packaging de l'application Java.
+    Docker : création et exécution des conteneurs.
+    Docker Hub : stockage et distribution de l'image Docker du backend (repository privé).
+    Spring Boot : application backend et API REST.
+    MySQL 8.0 : base de données de l'application.
 
----
-
-## 2. Technologies Used
-
-| Technology | Role |
-|---|---|
-| Java 21 | Development environment |
-| Spring Boot | Backend application framework |
-| Maven | Build and dependency management |
-| Jenkins | CI/CD pipeline automation |
-| Docker | Containerization |
-| Docker Hub | Docker image registry |
-| MySQL 8.0 | Relational database |
-| Git & GitHub | Source code management |
-
----
-
-## 3. Project Architecture
-
-The application uses a containerized architecture composed of a Spring Boot backend and a MySQL database.
-
-The backend container communicates with the MySQL container through a dedicated Docker network.
-
-```text
-                 Developer
-                     |
-                     v
-                  GitHub
-                     |
-                     v
-                  Jenkins
-                     |
-          +----------+----------+
-          |                     |
-          v                     v
-     Maven Build           Docker Build
-          |                     |
-          +----------+----------+
-                     |
-                     v
-              Docker Image
-                     |
-                     v
-                 Docker Hub
-                     |
-                     v
-               Deployment
-                     |
-          +----------+----------+
-          |                     |
-          v                     v
-     Backend App             MySQL 8.0
-     Port 8080               Port 3306
-          |
-          v
-    REST API Endpoints
-```
-
-### Docker containers
-
-| Container | Image | Purpose | Port |
-|---|---|---|---|
-| `backend-app` | `meriem0014/backend-app:latest` | Spring Boot REST API | 8080 |
-| `mysql` | `mysql:8.0` | Database management | 3306 |
-
-Both containers are connected to the `backend-network` Docker network.
-
----
-
-## 4. Repository Structure
-
-```text
+3. Structure du dépôt
 DevOps-AppGestionDesProjets/
-│
+├── README.md
 ├── Jenkinsfile
-│
 └── backend/
     ├── Dockerfile
     ├── pom.xml
-    ├── mvnw
-    ├── src/
-    │   ├── main/
-    │   │   ├── java/
-    │   │   └── resources/
-    │   ││       └── application.properties
-    │   │
-    │   └── test/
-    │
-    └── target/
-```
+    └── src/
+        ├── main/
+        └── test/
 
----
+Le Jenkinsfile est placé à la racine du dépôt. Le projet Maven et le Dockerfile se trouvent dans le dossier backend/.
+4. Architecture et déroulement du déploiement
+GitHub (branche main)
+        |
+        v
+      Jenkins
+        |
+        +--> Checkout du code source
+        |
+        +--> Build Maven / package
+        |
+        +--> Construction de l'image Docker
+        |
+        +--> Publication sur Docker Hub (repository privé)
+        |
+        +--> Déploiement du conteneur MySQL
+        |
+        +--> Déploiement du backend Spring Boot
+        |
+        +--> Vérification des conteneurs et des logs
 
-## 5. Continuous Delivery Pipeline
+Jenkins exécute les étapes dans l'ordre défini dans le Jenkinsfile. Si une étape échoue, le pipeline ne peut pas être considéré comme un déploiement réussi.
+5. Pipeline Jenkins (CD)
 
-The Jenkins pipeline is defined in the `Jenkinsfile` at the root of the repository.
+Le pipeline est défini dans le fichier Jenkinsfile et comporte les étapes suivantes :
+5.1 Checkout
 
-It automates the following stages:
+Jenkins récupère le dépôt GitHub sur la branche main :
 
-### Stage 1 – Checkout
+    Repository : https://github.com/Meriem0014/DevOps-AppGestionDesProjets.git
+    Branch : main
 
-Jenkins retrieves the source code from the GitHub repository using the configured branch.
+Cette étape met le code source à disposition de Jenkins pour la suite du pipeline.
+5.2 Build Maven
 
-### Stage 2 – Build Maven
-
-Maven compiles the Spring Boot application and packages it into a JAR file.
-
-```bash
+Dans le répertoire backend, Maven nettoie le précédent build et génère le package de l'application :
 mvn clean package -DskipTests
-```
 
-The `-DskipTests` option skips the execution of tests during this pipeline build.
+L'option -DskipTests permet de ne pas exécuter les tests automatisés pendant ce pipeline. Le package est ensuite utilisé pour construire l'image Docker.
+5.3 Docker Build
 
-### Stage 3 – Docker Build
-
-Docker builds an image containing the backend application using the Dockerfile.
-
-The image is tagged locally as:
-
-```text
+Docker construit l'image à partir du Dockerfile présent dans le dossier backend. Le pipeline utilise le nom et le tag suivants :
 backend-app:latest
 meriem0014/backend-app:latest
-```
 
-### Stage 4 – Docker Push
+Le tag latest désigne la version publiée sous ce tag. L'image est préparée pour être déployée dans le conteneur backend.
+5.4 Docker Push
 
-Jenkins authenticates with Docker Hub using stored credentials and publishes the image to the Docker Hub repository.
-
-```text
+Jenkins s'authentifie auprès de Docker Hub avec un credential Jenkins configuré (le token n'est pas stocké dans le dépôt), puis publie l'image :
 meriem0014/backend-app:latest
-```
 
-The credentials are managed through Jenkins Credentials and are not hardcoded into the pipeline.
+Le repository Docker Hub utilisé est privé. Les identifiants sont gérés dans Jenkins Credentials et ne doivent pas être écrits dans le Jenkinsfile, le README ou les captures d'écran.
+5.5 Deploy MySQL
 
-### Stage 5 – Deploy MySQL
+Le pipeline crée ou réutilise le réseau Docker backend-network et déploie le conteneur MySQL avec l'image mysql:8.0. La base utilisée par l'application est test_db.
 
-Jenkins ensures that the MySQL container is running.
+La configuration de déploiement prévoit un volume Docker nommé mysql_data afin de conserver les données de la base lors du remplacement ou du redémarrage du conteneur, ainsi qu'un contrôle de santé (health check) pour vérifier que MySQL est prêt.
+5.6 Deploy Backend
 
-The deployment uses:
+Le pipeline récupère l'image backend publiée, remplace le conteneur backend précédent si nécessaire et lance le nouveau conteneur sur le réseau backend-network.
 
-- MySQL 8.0
-- Database: `test_db`
-- Docker network: `backend-network`
-- Persistent volume: `mysql_data`
-- Health check to verify database readiness
+Le backend est exposé sur le port :
+8080 (hôte) -> 8080 (conteneur)
 
-### Stage 6 – Deploy Backend
-
-Jenkins deploys the backend application by pulling the Docker image from Docker Hub and launching the container.
-
-The backend container:
-
-- Uses the Docker network `backend-network`.
-- Exposes port `8080`.
-- Connects to MySQL using the hostname `mysql`.
-- Uses environment variables for its database configuration.
-
-### Stage 7 – Verify Deployment
-
-Jenkins checks the deployed containers and displays the backend logs to verify that the application has started.
-
-The pipeline reports its final execution status as successful or failed.
-
----
-
-## 6. Docker Configuration
-
-### Backend Dockerfile
-
-The Dockerfile is located in the `backend/` directory.
-
-It is responsible for creating the backend image, containing the Java runtime and the packaged Spring Boot application.
-
-The resulting image is used by Jenkins for deployment.
-
-### Docker Network
-
-A dedicated Docker network is created:
-
-```bash
-docker network create backend-network
-```
-
-The backend connects to MySQL using the container name:
-
-```text
-mysql
-```
-
-This allows the application to reach the database internally without relying on `localhost`.
-
-### Persistent Database Storage
-
-A Docker volume is used to preserve MySQL data:
-
-```text
-mysql_data
-```
-
-This allows database data to persist beyond the lifecycle of the MySQL container.
-
----
-
-## 7. Configuration
-
-The application uses environment variables during deployment to configure the database connection.
-
-| Variable | Description |
-|---|---|
-| `SPRING_DATASOURCE_URL` | MySQL connection URL |
-| `SPRING_DATASOURCE_USERNAME` | Database username |
-| `SPRING_DATASOURCE_PASSWORD` | Database password |
-
-The deployed backend connects to MySQL using:
-
-```text
+La connexion à MySQL utilise le nom du service/conteneur mysql sur le réseau Docker, plutôt que localhost depuis le conteneur backend :
 jdbc:mysql://mysql:3306/test_db?createDatabaseIfNotExist=true
-```
+5.7 Verify Deployment
 
-The database hostname `mysql` corresponds to the MySQL container name within the Docker network.
+La dernière étape affiche l'état des conteneurs et les logs du backend afin de vérifier que le déploiement a démarré. Le résultat attendu est un conteneur MySQL healthy et un backend en cours d'exécution.
+6. Commandes Docker utilisées
 
-Sensitive credentials should be stored securely and never committed to GitHub.
+Les commandes ci-dessous sont les commandes principales utilisées ou utiles pour reproduire et vérifier les étapes du pipeline.
+Construire l'image backend
 
----
-
-## 8. Running the Application
-
-### Prerequisites
-
-- Java
-- Maven
-- Docker Engine
-- Git
-
-### Build the backend manually
-
-```bash
+Depuis le répertoire du projet :
 cd backend
-mvn clean package -DskipTests
-```
+docker build -t backend-app:latest .
+Taguer l'image pour Docker Hub
+docker tag backend-app:latest meriem0014/backend-app:latest
+Publier l'image sur Docker Hub
 
-### Build the Docker image
-
-From the repository root:
-
-```bash
-docker build -t backend-app:latest ./backend
-```
-
-### Start MySQL
-
-```bash
-docker network create backend-network
-```
-
-```bash
-docker volume create mysql_data
-```
-
-```bash
-docker run -d \
-  --name mysql \
-  --network backend-network \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=test_db \
-  -v mysql_data:/var/lib/mysql \
-  -p 3306:3306 \
-  mysql:8.0
-```
-
-### Start the backend
-
-```bash
-docker run -d \
-  --name backend-app \
-  --network backend-network \
-  -p 8080:8080 \
-  -e SPRING_DATASOURCE_URL="jdbc:mysql://mysql:3306/test_db?createDatabaseIfNotExist=true" \
-  -e SPRING_DATASOURCE_USERNAME=root \
-  -e SPRING_DATASOURCE_PASSWORD=root \
-  backend-app:latest
-```
-
----
-
-## 9. Testing the Deployment
-
-### Verify running containers
-
-```bash
+Après authentification Docker Hub (Jenkins utilise un credential sécurisé pour cette opération) :
+docker push meriem0014/backend-app:latest
+Télécharger l'image depuis Docker Hub
+docker pull meriem0014/backend-app:latest
+Afficher les conteneurs en cours d'exécution
 docker ps
-```
-
-### Verify Docker images
-
-```bash
+Afficher les images locales
 docker images
-```
-
-### Check backend logs
-
-```bash
+Afficher les logs du backend
 docker logs --tail 50 backend-app
-```
-
-### Test the REST API
-
-```bash
+Tester l'API REST
 curl -i http://localhost:8080/entreprise/all
-```
+7. Vérification du déploiement
 
-Expected result:
+Le déploiement a été vérifié à l'aide des éléments suivants :
 
-```http
-HTTP/1.1 200
-Content-Type: application/json
-```
+    Pipeline Jenkins terminé avec des stages au vert dans la vue Stage View.
+    Images backend présentes localement : backend-app:latest et meriem0014/backend-app:latest.
+    Image MySQL utilisée : mysql:8.0.
+    Logs du backend indiquant le démarrage de Spring Boot et de Tomcat.
+    Appel HTTP à l'endpoint GET /entreprise/all avec le code de réponse HTTP 200.
 
-The endpoint returns a JSON response containing the list of enterprises. If the database is empty, the response may be:
+La réponse JSON [] signifie que l'endpoint fonctionne mais qu'aucune entreprise n'est encore enregistrée dans la base. Ce n'est pas une erreur HTTP.
+8. Captures d'écran / preuves
 
-```json
-[]
-```
+Les captures fournies sont incluses dans le dossier screenshots/.
+8.1 Construction de l'image Docker et extrait du Jenkinsfile
 
-An HTTP 200 response confirms that the request reached the backend successfully and that the endpoint responded correctly.
+Figure 1 – Sortie de la construction de l'image Docker et extrait du Jenkinsfile.
+8.2 Pipeline Jenkins, image Docker, Docker Hub et logs de démarrage
 
----
+Figure 2 – Pipeline Jenkins avec stages réussis, images Docker locales, repository Docker Hub et extrait des logs de démarrage Spring Boot.
+8.3 Test de l'API REST
 
-## 10. Jenkins Configuration
+Figure 3 – Test de l'endpoint GET /entreprise/all : réponse HTTP 200.
+Capture à ajouter pour docker ps
 
-The Jenkins pipeline requires Docker Hub credentials to publish the application image.
+Le document de captures fourni ne contient pas une capture clairement dédiée à la commande docker ps montrant simultanément les deux conteneurs (mysql avec l'état healthy et backend-app en cours d'exécution). Ajouter cette capture ici avant la remise finale :
 
-### Required Jenkins credential
+    Figure 4 – Conteneurs MySQL et backend en cours d'exécution (docker ps).
 
-| Field | Value |
-|---|---|
-| Credential type | Username with password |
-| Username | Docker Hub username |
-| Password | Docker Hub access token |
-| Credential ID | `dockerhub-credentials` |
+Commande à exécuter :
+docker ps
 
-The credential ID must match the one referenced in the Jenkinsfile.
+Prendre une capture où l'on voit les noms mysql et backend-app, leurs images, leurs statuts et le mapping du port du backend.
+9. Conclusion
 
-### Pipeline execution
+Ce travail met en place un pipeline CD Jenkins qui automatise la récupération du code, le packaging Maven, la construction et la publication de l'image Docker, puis le déploiement des conteneurs MySQL et backend. La vérification finale confirme le démarrage de l'application et l'accessibilité de l'API REST via une réponse HTTP 200.
 
-The pipeline can be triggered through Jenkins by running the configured pipeline job.
-
-The Jenkins Stage View provides a visual overview of the execution of each stage, while the Console Output provides detailed execution logs.
-
----
-
-## 11. Results
-
-The implemented pipeline automates the following operations:
-
-- Retrieval of the application source code.
-- Maven compilation and packaging.
-- Docker image creation.
-- Publishing the image to Docker Hub.
-- Deployment of the MySQL database container.
-- Deployment of the Spring Boot backend container.
-- Verification of the deployed application.
-
-The deployed backend was verified through Docker container status, application logs, and an HTTP request to the REST API.
-
----
-
-## 12. Limitations and Future Improvements
-
-Several improvements can be introduced to make the pipeline more robust and closer to production standards:
-
-- Integrate automated unit and integration tests into the pipeline.
-- Use a dedicated non-root MySQL user instead of the root account.
-- Replace `latest` with versioned Docker image tags.
-- Improve health checks for the backend application.
-- Add automated rollback in case of deployment failure.
-- Implement monitoring and alerting.
-- Secure sensitive information using dedicated secrets management.
-- Add SonarQube for static code analysis.
-- Add automated testing before deployment.
-
----
-
-## 13. Conclusion
-
-This project demonstrates the implementation of a Continuous Delivery workflow using Jenkins, Maven, Docker, Docker Hub, Spring Boot, and MySQL.
-
-The pipeline automates the main deployment steps, from source code retrieval to container deployment, making the application deployment process more reliable, reproducible, and easier to maintain.
-
-It also provides a foundation for future DevOps improvements, including continuous integration, automated testing, security analysis, monitoring, and deployment optimization.
+Le déploiement est ainsi automatisé et les étapes ainsi que les preuves d'exécution sont documentées dans ce repository.
